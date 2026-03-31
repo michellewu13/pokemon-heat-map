@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pokémon Analytics</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  color-scheme: dark;
+  --bg:       #241E2A;
+  --surface:  #2E2638;
+  --surface2: #3C3248;
+  --text:     #F4EEFF;
+  --muted:    #A090B8;
+  --accent:   #C9A0C0;
+  --accent2:  #DDB8D8;
+  --border:   #4A3E5A;
+  --inp-bg:   #1C1824;
+  --shadow:   rgba(0,0,0,.5);
+  --axis:     #6A5A7A;
+  --grid:     rgba(255,255,255,.05);
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg:       #FDF4F8;
+  --surface:  #FFF8FC;
+  --surface2: #F4E4EE;
+  --text:     #2E1A28;
+  --muted:    #8A607A;
+  --accent:   #C47898;
+  --accent2:  #D898B0;
+  --border:   #E8C8D8;
+  --inp-bg:   #FFFAFE;
+  --shadow:   rgba(60,20,50,.15);
+  --axis:     #B090A0;
+  --grid:     rgba(0,0,0,.06);
+}
+
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .3s,color .3s}
+
+/* Loading */
+#loading{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;transition:opacity .4s}
+#loading.out{opacity:0;pointer-events:none}
+.pball{width:52px;height:52px;border-radius:50%;position:relative;animation:spin 1.1s linear infinite}
+.pball-t{position:absolute;top:0;left:0;right:0;height:26px;background:#e53935;border-radius:26px 26px 0 0;border:4px solid #2A1408;border-bottom:none}
+.pball-b{position:absolute;bottom:0;left:0;right:0;height:26px;background:#f5f5f5;border-radius:0 0 26px 26px;border:4px solid #2A1408;border-top:none}
+.pball-m{position:absolute;top:50%;left:0;right:0;height:6px;background:#2A1408;transform:translateY(-50%)}
+.pball-c{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:14px;height:14px;background:#fff;border-radius:50%;border:4px solid #2A1408;z-index:1}
+@keyframes spin{to{transform:rotate(360deg)}}
+#prog-text{font-size:.85rem;color:var(--muted)}
+#prog-wrap{width:220px;height:5px;background:var(--border);border-radius:99px;overflow:hidden}
+#prog-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%;transition:width .12s}
+
+/* Header */
+header{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:.65rem 1.5rem;display:flex;align-items:center;gap:1rem;
+  position:sticky;top:0;z-index:100;
+  transition:background .3s,border-color .3s;flex-wrap:wrap;
+}
+header h1{
+  font-size:1.2rem;font-weight:800;
+  background:linear-gradient(90deg,#E8A0B8,#D4B8E8,#A0C8B8,#98B8D8);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  white-space:nowrap;
+}
+.header-links{display:flex;gap:.5rem;align-items:center}
+.nav-link{
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:6px;padding:.26rem .6rem;font-size:.75rem;text-decoration:none;
+  font-weight:500;transition:background .12s,color .12s;
+}
+.nav-link:hover{background:var(--surface2);color:var(--text)}
+#theme-toggle{
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:6px;padding:.22rem .55rem;font-size:.73rem;cursor:pointer;
+  transition:background .12s,color .12s;white-space:nowrap;margin-left:auto;
+}
+#theme-toggle:hover{background:var(--surface2);color:var(--text)}
+
+/* Main */
+main{padding:1.25rem 1.5rem 2.5rem;max-width:1400px;margin:0 auto}
+
+/* Insight strip */
+.insights{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem;margin-bottom:1.5rem}
+.insight-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:.8rem 1rem;transition:background .3s,border-color .3s;
+}
+.insight-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;margin-bottom:.3rem}
+.insight-val{font-size:1.55rem;font-weight:800;color:var(--accent2);line-height:1}
+.insight-sub{font-size:.68rem;color:var(--muted);margin-top:.25rem}
+
+/* Chart grid */
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:1rem}
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:1rem 1.2rem .9rem;transition:background .3s,border-color .3s;
+}
+.card-title{font-size:.82rem;font-weight:800;margin-bottom:.15rem}
+.card-sub{font-size:.68rem;color:var(--muted);margin-bottom:.85rem}
+.chart-wrap{width:100%;overflow:hidden}
+.chart-wrap svg{display:block;width:100%}
+
+/* Axis & chart text rendered via JS inherits these via currentColor */
+.chart-axis-text{font-family:'Segoe UI',system-ui,sans-serif}
+
+/* Hover tooltip */
+#htip{
+  position:fixed;background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:.5rem .7rem;font-size:.75rem;pointer-events:none;
+  z-index:500;opacity:0;transform:translateY(4px);transition:opacity .1s,transform .1s;
+  white-space:nowrap;min-width:100px;
+}
+#htip.vis{opacity:1;transform:translateY(0)}
+#htip strong{display:block;font-size:.8rem;color:var(--accent2);margin-bottom:.15rem}
+
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+@media(max-width:600px){
+  .chart-grid{grid-template-columns:1fr}
+  main{padding:1rem}
+}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="pball"><div class="pball-t"></div><div class="pball-b"></div><div class="pball-m"></div><div class="pball-c"></div></div>
+  <div id="prog-text">Loading Pokémon data…</div>
+  <div id="prog-wrap"><div id="prog-bar"></div></div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1>📊 Pokémon Analytics</h1>
+    <div class="header-links">
+      <a class="nav-link" href="index.html">↩ Heatmap</a>
+      <a class="nav-link" href="radial.html">↩ Radial</a>
+    </div>
+    <button id="theme-toggle">☀ Light</button>
+  </header>
+
+  <main>
+    <div class="insights" id="insights"></div>
+    <div class="chart-grid">
+      <div class="card"><div class="card-title">Pokémon Count per Generation</div><div class="card-sub">How many new Pokémon were introduced each generation</div><div class="chart-wrap" id="c-count"></div></div>
+      <div class="card"><div class="card-title">Average BST Trend</div><div class="card-sub">BST (Base Stat Total) is the sum of all 6 stats — higher means stronger. Tracks power creep across generations.</div><div class="chart-wrap" id="c-bst"></div></div>
+      <div class="card"><div class="card-title">Average Stats by Generation</div><div class="card-sub">How each individual stat evolved across generations</div><div class="chart-wrap" id="c-stats"></div></div>
+      <div class="card"><div class="card-title">Primary Type Distribution</div><div class="card-sub">Count of each primary type introduced per generation</div><div class="chart-wrap" id="c-types"></div></div>
+      <div class="card"><div class="card-title">Legendary &amp; Mythical Breakdown</div><div class="card-sub">Regular vs. legendary vs. mythical Pokémon per generation</div><div class="chart-wrap" id="c-rarity"></div></div>
+      <div class="card"><div class="card-title">Dual-Type Rate</div><div class="card-sub">Percentage of Pokémon with two types per generation</div><div class="chart-wrap" id="c-dual"></div></div>
+    </div>
+  </main>
+</div>
+
+<div id="htip"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════
+const GEN_RANGES = {1:[1,151],2:[152,251],3:[252,386],4:[387,493],5:[494,649],
+                    6:[650,721],7:[722,809],8:[810,905],9:[906,1025]};
+const GEN_LABELS = ['G1','G2','G3','G4','G5','G6','G7','G8','G9'];
+const GEN_FULL   = ['Gen 1\nKanto','Gen 2\nJohto','Gen 3\nHoenn','Gen 4\nSinnoh',
+                    'Gen 5\nUnova','Gen 6\nKalos','Gen 7\nAlola','Gen 8\nGalar','Gen 9\nPaldea'];
+
+const TYPES = ['normal','fire','water','electric','grass','ice','fighting','poison',
+               'ground','flying','psychic','bug','rock','ghost','dragon','dark','steel','fairy'];
+const TYPE_COLORS = {
+  normal:'#A8A878',fire:'#F08030',water:'#6890F0',electric:'#F8D030',
+  grass:'#78C850',ice:'#98D8D8',fighting:'#C03028',poison:'#A040A0',
+  ground:'#E0C068',flying:'#A890F0',psychic:'#F85888',bug:'#A8B820',
+  rock:'#B8A038',ghost:'#705898',dragon:'#7038F8',dark:'#705848',
+  steel:'#B8B8D0',fairy:'#EE99AC'
+};
+const STAT_COLORS = ['#FF9999','#FFD099','#FFE899','#AABEFF','#AADDAA','#FFAAC8'];
+const STAT_LABELS = ['HP','Atk','Def','SpA','SpD','Spe'];
+const GEN_COLORS  = ['#E890A0','#E8C070','#90C890','#90A8E8','#C0B0C8',
+                     '#C090E8','#E8B090','#80C8D8','#E890C8'];
+
+const LEGENDARY_IDS = new Set([
+  144,145,146,150,243,244,245,249,250,377,378,379,380,381,382,383,384,
+  480,481,482,483,484,485,486,487,488,638,639,640,641,642,643,644,645,646,
+  716,717,718,772,773,785,786,787,788,789,790,791,792,800,
+  888,889,890,891,892,894,895,896,897,898,905,
+  1001,1002,1003,1007,1008,1009,1010
+]);
+const MYTHICAL_IDS = new Set([
+  151,251,385,386,489,490,491,492,493,494,647,648,649,719,720,721,
+  801,802,807,808,809,893,1014,1015,1016,1017,1025
+]);
+
+const NS = 'http://www.w3.org/2000/svg';
+
+// ═══════════════════════════════════════════
+// SVG HELPERS
+// ═══════════════════════════════════════════
+function el(tag, attrs={}, txt='') {
+  const e = document.createElementNS(NS, tag);
+  for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+  if (txt) e.textContent = txt;
+  return e;
+}
+function mkSVG(w, h) {
+  return el('svg', {viewBox:`0 0 ${w} ${h}`, width:'100%', preserveAspectRatio:'xMidYMid meet'});
+}
+function css(val) { return `var(${val})`; }
+
+// Map value to pixel in a range
+function scale(v, min, max, pxMin, pxMax) {
+  if (max === min) return (pxMin + pxMax) / 2;
+  return pxMin + ((v - min) / (max - min)) * (pxMax - pxMin);
+}
+
+// Smooth cubic bezier path through points [{x,y}]
+function smoothPath(pts) {
+  if (!pts.length) return '';
+  let d = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i-1], c = pts[i];
+    const mx = (p.x + c.x) / 2;
+    d += ` C${mx},${p.y} ${mx},${c.y} ${c.x},${c.y}`;
+  }
+  return d;
+}
+
+function drawAxes(svg, {x0,y0,x1,y1,minY,maxY,steps=5,genLabels,textColor}) {
+  const g = el('g');
+  // Y gridlines + labels
+  for (let i = 0; i <= steps; i++) {
+    const v = minY + (maxY - minY) * (i / steps);
+    const py = scale(v, minY, maxY, y1, y0);
+    g.appendChild(el('line',{x1:x0,y1:py,x2:x1,y2:py,stroke:'var(--grid)',
+      'stroke-width':'1','shape-rendering':'crispEdges'}));
+    const lbl = v >= 1000 ? (v/1000).toFixed(1)+'k' : Math.round(v);
+    g.appendChild(el('text',{x:x0-5,y:py+4,'text-anchor':'end',fill:'var(--axis)',
+      'font-size':'9','font-family':'Segoe UI,system-ui,sans-serif'},String(lbl)));
+  }
+  // X axis line
+  g.appendChild(el('line',{x1:x0,y1:y1,x2:x1,y2:y1,stroke:'var(--axis)',
+    'stroke-width':'1','shape-rendering':'crispEdges'}));
+  // Y axis line
+  g.appendChild(el('line',{x1:x0,y1:y0,x2:x0,y2:y1,stroke:'var(--axis)',
+    'stroke-width':'1','shape-rendering':'crispEdges'}));
+  // X labels (gens)
+  if (genLabels) {
+    const step = (x1 - x0) / 8;
+    GEN_LABELS.forEach((lbl,i) => {
+      g.appendChild(el('text',{x: x0 + i*step, y: y1+13,
+        'text-anchor':'middle',fill:'var(--axis)','font-size':'9',
+        'font-family':'Segoe UI,system-ui,sans-serif'},lbl));
+    });
+  }
+  svg.appendChild(g);
+}
+
+// ═══════════════════════════════════════════
+// DATA LOADING
+// ═══════════════════════════════════════════
+function getGen(id) {
+  for (const [g,[lo,hi]] of Object.entries(GEN_RANGES)) if(id>=lo&&id<=hi) return +g;
+  return 9;
+}
+
+async function fetchJSON(url) {
+  const r = await fetch(url); if(!r.ok) throw new Error(r.status); return r.json();
+}
+
+async function loadData() {
+  // Try caches from the other pages
+  for (const key of ['poke_radial_v3','pokedex_v4']) {
+    try {
+      const c = localStorage.getItem(key);
+      if (c) {
+        const {ts, data} = JSON.parse(c);
+        if (Date.now() - ts < 24*60*60*1000 && data?.length > 900) {
+          // normalise: ensure bst exists
+          return data.map(p => ({
+            ...p,
+            bst: p.bst ?? p.stats.reduce((s,v)=>s+v,0),
+            types: Array.isArray(p.types) && typeof p.types[0]==='string'
+              ? p.types : p.types.map(t=>t.type?.name||t)
+          }));
+        }
+      }
+    } catch(_) {}
+  }
+  // Fetch fresh
+  const BATCH = 50; const TOTAL = 1025;
+  const results = new Array(TOTAL).fill(null);
+  let done = 0;
+  async function fetchOne(id) {
+    const raw = await fetchJSON(`https://pokeapi.co/api/v2/pokemon/${id}`);
+    const statKeys = ['hp','attack','defense','special-attack','special-defense','speed'];
+    const stats = statKeys.map(k=>{const s=raw.stats.find(x=>x.stat.name===k);return s?s.base_stat:0;});
+    results[id-1] = {id:raw.id,name:raw.name,types:raw.types.map(t=>t.type.name),
+      stats,bst:stats.reduce((a,b)=>a+b,0),height:raw.height,weight:raw.weight};
+    done++;
+    document.getElementById('prog-bar').style.width=(done/TOTAL*100)+'%';
+    document.getElementById('prog-text').textContent=`Loading… ${done}/${TOTAL}`;
+  }
+  for (let s=1;s<=TOTAL;s+=BATCH) {
+    const end=Math.min(s+BATCH-1,TOTAL);
+    await Promise.all(Array.from({length:end-s+1},(_,i)=>fetchOne(s+i)));
+  }
+  const data = results.filter(Boolean);
+  try { localStorage.setItem('poke_radial_v3',JSON.stringify({ts:Date.now(),data})); } catch(_){}
+  return data;
+}
+
+// ═══════════════════════════════════════════
+// COMPUTE PER-GEN STATS
+// ═══════════════════════════════════════════
+function computeStats(pokemon) {
+  const byGen = Array.from({length:9},()=>[]);
+  for (const p of pokemon) byGen[getGen(p.id)-1].push(p);
+  return byGen.map((mons,gi) => {
+    const n = mons.length;
+    if (!n) return null;
+    const avgBST = mons.reduce((s,p)=>s+p.bst,0)/n;
+    const avgStats = [0,1,2,3,4,5].map(i=>mons.reduce((s,p)=>s+p.stats[i],0)/n);
+    const typeCounts = {};
+    for (const p of mons) { typeCounts[p.types[0]]=(typeCounts[p.types[0]]||0)+1; }
+    const legendary = mons.filter(p=>LEGENDARY_IDS.has(p.id)).length;
+    const mythical  = mons.filter(p=>MYTHICAL_IDS.has(p.id)).length;
+    const dual      = mons.filter(p=>p.types.length>1).length;
+    return {gen:gi+1,n,avgBST,avgStats,typeCounts,
+      legendary,mythical,regular:n-legendary-mythical,
+      dualPct:dual/n*100};
+  }).filter(Boolean);
+}
+
+// ═══════════════════════════════════════════
+// CHART 1 — Count per Gen (bar)
+// ═══════════════════════════════════════════
+function drawCount(genStats) {
+  const W=480,H=210,P={t:20,r:12,b:38,l:45};
+  const pw=W-P.l-P.r, ph=H-P.t-P.b;
+  const svg=mkSVG(W,H);
+  const max=Math.max(...genStats.map(g=>g.n));
+  const barW=pw/9, gap=barW*.18;
+
+  drawAxes(svg,{x0:P.l,y0:P.t,x1:W-P.r,y1:H-P.b,minY:0,maxY:Math.ceil(max/50)*50,steps:4,genLabels:true});
+
+  genStats.forEach((g,i)=>{
+    const bh=(g.n/Math.ceil(max/50)/50)*ph; // calc properly
+    const bh2=scale(g.n,0,Math.ceil(max/50)*50,0,ph);
+    const bx=P.l+i*barW+gap/2;
+    const by=P.t+ph-bh2;
+    const rect=el('rect',{x:bx,y:by,width:barW-gap,height:bh2,
+      fill:GEN_COLORS[i],rx:'4',opacity:'.9'});
+    addTip(rect,`<strong>Gen ${g.gen}</strong>${g.n} Pokémon introduced`);
+    svg.appendChild(rect);
+    // count label on top
+    svg.appendChild(el('text',{x:bx+(barW-gap)/2,y:by-3,'text-anchor':'middle',
+      fill:'var(--text)','font-size':'8','font-weight':'700',
+      'font-family':'Segoe UI,system-ui,sans-serif'},String(g.n)));
+  });
+  document.getElementById('c-count').appendChild(svg);
+}
+
+// ═══════════════════════════════════════════
+// CHART 2 — BST Trend (area line)
+// ═══════════════════════════════════════════
+function drawBST(genStats) {
+  const W=480,H=210,P={t:20,r:12,b:38,l:48};
+  const pw=W-P.l-P.r, ph=H-P.t-P.b;
+  const svg=mkSVG(W,H);
+  const vals=genStats.map(g=>g.avgBST);
+  const mn=Math.floor(Math.min(...vals)/10)*10-10;
+  const mx=Math.ceil(Math.max(...vals)/10)*10+10;
+
+  drawAxes(svg,{x0:P.l,y0:P.t,x1:W-P.r,y1:H-P.b,minY:mn,maxY:mx,steps:4,genLabels:true});
+
+  const pts=genStats.map((g,i)=>({
+    x:P.l+i*(pw/8), y:scale(g.avgBST,mn,mx,H-P.b,P.t)
+  }));
+
+  // area fill
+  const areaD=smoothPath(pts)+` L${pts[pts.length-1].x},${H-P.b} L${pts[0].x},${H-P.b} Z`;
+  const grad=el('defs');
+  const lg=el('linearGradient',{id:'bst-grad',x1:'0',y1:'0',x2:'0',y2:'1'});
+  lg.appendChild(el('stop',{offset:'0%','stop-color':'var(--accent)','stop-opacity':'.4'}));
+  lg.appendChild(el('stop',{offset:'100%','stop-color':'var(--accent)','stop-opacity':'.02'}));
+  grad.appendChild(lg); svg.appendChild(grad);
+  svg.appendChild(el('path',{d:areaD,fill:'url(#bst-grad)'}));
+
+  // line
+  svg.appendChild(el('path',{d:smoothPath(pts),fill:'none',stroke:'var(--accent)',
+    'stroke-width':'2.5','stroke-linecap':'round','stroke-linejoin':'round'}));
+
+  // dots + tooltips
+  genStats.forEach((g,i)=>{
+    const c=el('circle',{cx:pts[i].x,cy:pts[i].y,r:'5',fill:'var(--accent)',
+      stroke:'var(--surface)','stroke-width':'2'});
+    addTip(c,`<strong>Gen ${g.gen}</strong>Avg BST: ${g.avgBST.toFixed(1)}`);
+    svg.appendChild(c);
+  });
+  document.getElementById('c-bst').appendChild(svg);
+}
+
+// ═══════════════════════════════════════════
+// CHART 3 — Stats by Gen (multi-line)
+// ═══════════════════════════════════════════
+function drawStats(genStats) {
+  const W=480,H=230,P={t:20,r:12,b:55,l:45};
+  const pw=W-P.l-P.r, ph=H-P.t-P.b;
+  const svg=mkSVG(W,H);
+  const allVals=genStats.flatMap(g=>g.avgStats);
+  const mn=Math.floor(Math.min(...allVals)/5)*5-2;
+  const mx=Math.ceil(Math.max(...allVals)/5)*5+2;
+
+  drawAxes(svg,{x0:P.l,y0:P.t,x1:W-P.r,y1:H-P.b,minY:mn,maxY:mx,steps:4,genLabels:true});
+
+  STAT_LABELS.forEach((label,si)=>{
+    const pts=genStats.map((g,i)=>({
+      x:P.l+i*(pw/8), y:scale(g.avgStats[si],mn,mx,H-P.b,P.t)
+    }));
+    svg.appendChild(el('path',{d:smoothPath(pts),fill:'none',
+      stroke:STAT_COLORS[si],'stroke-width':'2','stroke-linecap':'round','stroke-linejoin':'round',opacity:'.85'}));
+    genStats.forEach((g,i)=>{
+      const c=el('circle',{cx:pts[i].x,cy:pts[i].y,r:'3.5',fill:STAT_COLORS[si]});
+      addTip(c,`<strong>${label} — Gen ${g.gen}</strong>Avg: ${g.avgStats[si].toFixed(1)}`);
+      svg.appendChild(c);
+    });
+  });
+
+  // Legend
+  const lgY=H-P.b+26;
+  STAT_LABELS.forEach((lbl,i)=>{
+    const lx=P.l+(i*(pw/6));
+    svg.appendChild(el('rect',{x:lx,y:lgY,width:'10',height:'4',rx:'2',fill:STAT_COLORS[i]}));
+    svg.appendChild(el('text',{x:lx+13,y:lgY+5,fill:'var(--muted)','font-size':'8.5',
+      'font-family':'Segoe UI,system-ui,sans-serif'},lbl));
+  });
+
+  document.getElementById('c-stats').appendChild(svg);
+}
+
+// ═══════════════════════════════════════════
+// CHART 4 — Type Heatmap (gen × type)
+// ═══════════════════════════════════════════
+function drawTypes(genStats) {
+  const TYPES18=['normal','fire','water','electric','grass','ice','fighting','poison',
+                 'ground','flying','psychic','bug','rock','ghost','dragon','dark','steel','fairy'];
+  const W=480,H=230;
+  const LPAD=28, TPAD=52, RPAD=8, BPAD=12;
+  const cellW=(W-LPAD-RPAD)/18, cellH=(H-TPAD-BPAD)/9;
+  const svg=mkSVG(W,H);
+
+  // Build max count for color normalization
+  let globalMax=0;
+  genStats.forEach(g=>TYPES18.forEach(t=>{ if(g.typeCounts[t]>globalMax)globalMax=g.typeCounts[t]; }));
+
+  // Type column labels (rotated)
+  TYPES18.forEach((t,ti)=>{
+    const cx=LPAD+(ti+.5)*cellW;
+    const txt=el('text',{
+      x:0,y:0,
+      transform:`translate(${cx},${TPAD-5}) rotate(-45)`,
+      'text-anchor':'start',fill:TYPE_COLORS[t],'font-size':'7.5','font-weight':'700',
+      'font-family':'Segoe UI,system-ui,sans-serif'
+    });
+    txt.textContent=t.slice(0,4).toUpperCase();
+    svg.appendChild(txt);
+  });
+
+  // Gen row labels + cells
+  genStats.forEach((g,gi)=>{
+    const cy=TPAD+gi*cellH;
+    svg.appendChild(el('text',{x:LPAD-4,y:cy+cellH*.6,'text-anchor':'end',
+      fill:'var(--axis)','font-size':'8','font-family':'Segoe UI,system-ui,sans-serif'},`G${g.gen}`));
+
+    TYPES18.forEach((t,ti)=>{
+      const cnt=g.typeCounts[t]||0;
+      const intensity=cnt/globalMax;
+      const baseColor=TYPE_COLORS[t];
+      const cell=el('rect',{
+        x:LPAD+ti*cellW+.5, y:cy+.5,
+        width:cellW-1, height:cellH-1, rx:'2',
+        fill:baseColor, opacity: cnt ? 0.12+intensity*0.85 : 0.05
+      });
+      if (cnt) addTip(cell,`<strong>${t} · Gen ${g.gen}</strong>${cnt} Pokémon`);
+      svg.appendChild(cell);
+      if (cnt) {
+        svg.appendChild(el('text',{
+          x:LPAD+(ti+.5)*cellW, y:cy+cellH*.62,
+          'text-anchor':'middle',fill:'#fff','font-size':'7','font-weight':'700',
+          style:'text-shadow:0 1px 2px rgba(0,0,0,.5)',
+          'font-family':'Segoe UI,system-ui,sans-serif'
+        },String(cnt)));
+      }
+    });
+  });
+
+  document.getElementById('c-types').appendChild(svg);
+}
+
+// ═══════════════════════════════════════════
+// CHART 5 — Rarity Breakdown (stacked bar)
+// ═══════════════════════════════════════════
+function drawRarity(genStats) {
+  const W=480,H=210,P={t:20,r:80,b:38,l:45};
+  const pw=W-P.l-P.r, ph=H-P.t-P.b;
+  const svg=mkSVG(W,H);
+  const maxN=Math.max(...genStats.map(g=>g.n));
+  drawAxes(svg,{x0:P.l,y0:P.t,x1:W-P.r,y1:H-P.b,minY:0,maxY:Math.ceil(maxN/50)*50,steps:4,genLabels:true});
+
+  const barW=pw/9, gap=barW*.18;
+  const SEGS=[
+    {key:'regular',  color:'var(--accent)', label:'Regular'},
+    {key:'legendary',color:'#FFD080',       label:'Legendary'},
+    {key:'mythical', color:'#C090E8',       label:'Mythical'},
+  ];
+  const yMax=Math.ceil(maxN/50)*50;
+
+  genStats.forEach((g,i)=>{
+    const bx=P.l+i*barW+gap/2;
+    let yBase=H-P.b;
+    SEGS.forEach(seg=>{
+      const v=g[seg.key];
+      if(!v) return;
+      const bh=scale(v,0,yMax,0,ph);
+      const rect=el('rect',{x:bx,y:yBase-bh,width:barW-gap,height:bh,
+        fill:seg.color,rx:'2',opacity:'.88'});
+      addTip(rect,`<strong>Gen ${g.gen} — ${seg.label}</strong>${v} Pokémon`);
+      svg.appendChild(rect);
+      yBase-=bh;
+    });
+  });
+
+  // Legend
+  const lx=W-P.r+10;
+  SEGS.forEach((seg,i)=>{
+    svg.appendChild(el('rect',{x:lx,y:P.t+i*18,width:'10',height:'10',rx:'3',fill:seg.color,opacity:'.9'}));
+    svg.appendChild(el('text',{x:lx+14,y:P.t+i*18+8.5,fill:'var(--muted)',
+      'font-size':'9','font-family':'Segoe UI,system-ui,sans-serif'},seg.label));
+  });
+
+  document.getElementById('c-rarity').appendChild(svg);
+}
+
+// ═══════════════════════════════════════════
+// CHART 6 — Dual-type rate (line + area)
+// ═══════════════════════════════════════════
+function drawDual(genStats) {
+  const W=480,H=210,P={t:20,r:12,b:38,l:45};
+  const pw=W-P.l-P.r, ph=H-P.t-P.b;
+  const svg=mkSVG(W,H);
+  const vals=genStats.map(g=>g.dualPct);
+  const mn=0, mx=100;
+
+  drawAxes(svg,{x0:P.l,y0:P.t,x1:W-P.r,y1:H-P.b,minY:mn,maxY:mx,steps:4,genLabels:true});
+
+  // 50% reference line
+  const py50=scale(50,mn,mx,H-P.b,P.t);
+  svg.appendChild(el('line',{x1:P.l,y1:py50,x2:W-P.r,y2:py50,
+    stroke:'var(--accent2)','stroke-width':'1','stroke-dasharray':'4,3',opacity:'.5'}));
+  svg.appendChild(el('text',{x:W-P.r-2,y:py50-3,'text-anchor':'end',
+    fill:'var(--accent2)','font-size':'8','font-family':'Segoe UI,system-ui,sans-serif'},'50%'));
+
+  const pts=genStats.map((g,i)=>({x:P.l+i*(pw/8),y:scale(g.dualPct,mn,mx,H-P.b,P.t)}));
+
+  // gradient def
+  const defs=el('defs');
+  const lg=el('linearGradient',{id:'dual-grad',x1:'0',y1:'0',x2:'0',y2:'1'});
+  lg.appendChild(el('stop',{offset:'0%','stop-color':'var(--blue)','stop-opacity':'.4'}));
+  lg.appendChild(el('stop',{offset:'100%','stop-color':'var(--blue)','stop-opacity':'.02'}));
+  defs.appendChild(lg); svg.appendChild(defs);
+
+  const area=smoothPath(pts)+` L${pts[pts.length-1].x},${H-P.b} L${pts[0].x},${H-P.b} Z`;
+  svg.appendChild(el('path',{d:area,fill:'url(#dual-grad)'}));
+  svg.appendChild(el('path',{d:smoothPath(pts),fill:'none',stroke:'var(--blue)',
+    'stroke-width':'2.5','stroke-linecap':'round','stroke-linejoin':'round'}));
+
+  genStats.forEach((g,i)=>{
+    const c=el('circle',{cx:pts[i].x,cy:pts[i].y,r:'5',fill:'var(--blue)',
+      stroke:'var(--surface)','stroke-width':'2'});
+    addTip(c,`<strong>Gen ${g.gen}</strong>${g.dualPct.toFixed(1)}% dual-type`);
+    svg.appendChild(c);
+  });
+  document.getElementById('c-dual').appendChild(svg);
+}
+
+// ═══════════════════════════════════════════
+// INSIGHTS STRIP
+// ═══════════════════════════════════════════
+function buildInsights(pokemon, genStats) {
+  const typeFreq={};
+  for (const p of pokemon) typeFreq[p.types[0]]=(typeFreq[p.types[0]]||0)+1;
+  const topType=Object.entries(typeFreq).sort((a,b)=>b[1]-a[1])[0];
+  const avgBST=(pokemon.reduce((s,p)=>s+p.bst,0)/pokemon.length).toFixed(1);
+  const bigGen=genStats.reduce((a,b)=>b.n>a.n?b:a);
+  const dualPct=(pokemon.filter(p=>p.types.length>1).length/pokemon.length*100).toFixed(1);
+  const legendTotal=pokemon.filter(p=>LEGENDARY_IDS.has(p.id)).length;
+  const highBSTGen=genStats.reduce((a,b)=>b.avgBST>a.avgBST?b:a);
+
+  const items=[
+    {label:'Total Pokémon', val:'1,025', sub:'Gens 1–9'},
+    {label:'Avg BST',  val:avgBST,  sub:'Base Stat Total (sum of all 6 stats)'},
+    {label:'Most common type', val:topType[0].charAt(0).toUpperCase()+topType[0].slice(1), sub:`${topType[1]} Pokémon`},
+    {label:'Biggest gen',  val:`Gen ${bigGen.gen}`, sub:`${bigGen.n} new Pokémon`},
+    {label:'Dual-type rate', val:`${dualPct}%`, sub:'Have 2 types'},
+    {label:'Legendaries total', val:String(legendTotal), sub:'Legendary & mythical'},
+  ];
+
+  const container=document.getElementById('insights');
+  items.forEach(({label,val,sub})=>{
+    const card=document.createElement('div');
+    card.className='insight-card';
+    card.innerHTML=`<div class="insight-label">${label}</div><div class="insight-val">${val}</div><div class="insight-sub">${sub}</div>`;
+    container.appendChild(card);
+  });
+}
+
+// ═══════════════════════════════════════════
+// TOOLTIP HELPER
+// ═══════════════════════════════════════════
+const tip=document.getElementById('htip');
+function addTip(el, html) {
+  el.addEventListener('mouseenter', e=>{
+    tip.innerHTML=html; tip.classList.add('vis');
+    moveTip(e);
+  });
+  el.addEventListener('mousemove', moveTip);
+  el.addEventListener('mouseleave', ()=>tip.classList.remove('vis'));
+  el.style.cursor='pointer';
+}
+function moveTip(e) {
+  const m=12,w=tip.offsetWidth,h=tip.offsetHeight;
+  let x=e.clientX+m, y=e.clientY+m;
+  if(x+w>window.innerWidth-m) x=e.clientX-w-m;
+  if(y+h>window.innerHeight-m) y=e.clientY-h-m;
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+
+// ═══════════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════════
+(function(){
+  const root=document.documentElement;
+  const btn=document.getElementById('theme-toggle');
+  const saved=localStorage.getItem('poke_theme')||'dark';
+  function apply(t){
+    root.setAttribute('data-theme',t);
+    btn.textContent=t==='dark'?'☀ Light':'🌙 Dark';
+    localStorage.setItem('poke_theme',t);
+  }
+  apply(saved);
+  btn.addEventListener('click',()=>apply(root.getAttribute('data-theme')==='dark'?'light':'dark'));
+})();
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+async function init() {
+  try {
+    const pokemon = await loadData();
+    const genStats = computeStats(pokemon);
+    buildInsights(pokemon, genStats);
+    drawCount(genStats);
+    drawBST(genStats);
+    drawStats(genStats);
+    drawTypes(genStats);
+    drawRarity(genStats);
+    drawDual(genStats);
+    document.getElementById('app').style.display='block';
+    const l=document.getElementById('loading');
+    l.classList.add('out');
+    setTimeout(()=>l.style.display='none',500);
+  } catch(err) {
+    document.getElementById('prog-text').textContent='Error loading data — please refresh.';
+    console.error(err);
+  }
+}
+init();
+</script>
+</body>
+</html>
